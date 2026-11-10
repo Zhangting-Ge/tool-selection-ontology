@@ -2493,8 +2493,11 @@ function startReplay(){
     <span class="note">Use Next step at the bottom left.</span>`;
   $("cases").querySelectorAll(".case").forEach(b => b.onclick = () => loadCase(+b.dataset.i));
   $("chatTitle").textContent = "Conversation (recorded)";
-  loadCase(0);
+  loadCase(Math.max(0, hashCase()));
+  window.addEventListener("hashchange", () => { const i = hashCase(); if(i >= 0) loadCase(i); });
 }
+// a link such as recorded_runs.html#C12 opens that case (the interview page, 10.11.2026); without it the page starts with the first case
+function hashCase(){ const h = decodeURIComponent(location.hash.slice(1)); return window.CASES.findIndex(c => c.case === h); }
 function caseTitle(c){ const t = (c.meta.featureTypes || []).find(f => f.iri === c.run.record.featureClass); return t ? t.label : c.case; }
 document.addEventListener("keydown", e => {
   if(S.mode !== "replay" || e.target.closest("input,textarea,select")) return;
@@ -2515,7 +2518,7 @@ function startStudy(){
   $("studyCtl").innerHTML = `<button class="link" id="aboutBtn">About this study</button>${surveyLink()}`;
   $("aboutBtn").onclick = showIntro;
   document.addEventListener("keydown", e => { if(e.key === "Escape" && !$("intro").classList.contains("hidden")) closeIntro(); });
-  showIntro();
+  if(hashCase() < 0) showIntro();                                               // a link to one case skips the introduction
 }
 function showIntro(){
   const day = String(window.CASES[0].recorded).slice(0, 10).split("-").reverse().join(".");
