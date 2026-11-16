@@ -200,6 +200,29 @@ table.plain td{padding:6px 8px;border-bottom:1px solid var(--line2);vertical-ali
 .small{font-size:14.5px;color:var(--ink2)}
 ol.crit{margin:4px 0;padding-left:22px} ol.crit li{margin:6px 0}
 .empty{color:var(--ink2);font-size:15.5px}
+/* study page version 2 (16.11.2026): the next message stands in a box that cannot be changed, and a guide points at what to click */
+.composer textarea[readonly]{background:var(--paper);resize:none;cursor:default;min-height:0}
+.composer .skiprow{margin-top:8px;font-size:14.5px}
+.typing{display:inline-flex;align-items:center;gap:9px;color:var(--ink2);font-size:15.5px}
+.gblock{position:fixed;z-index:60;background:rgba(27,36,48,.5)}
+.gring{position:fixed;z-index:61;border:3px solid var(--red);border-radius:12px;pointer-events:none;animation:gp 1.6s ease-in-out infinite}
+@keyframes gp{0%,100%{box-shadow:0 0 0 0 rgba(197,14,31,.45)}50%{box-shadow:0 0 0 9px rgba(197,14,31,0)}}
+@media (prefers-reduced-motion:reduce){.gring{animation:none}}
+.gtip{position:fixed;z-index:62;width:max-content;max-width:min(340px,calc(100vw - 24px));background:var(--ink);color:#fff;border-radius:12px;padding:13px 16px 12px;font-size:16.5px;line-height:1.4;box-shadow:0 8px 28px rgba(27,36,48,.35)}
+.gtip .garrow{position:absolute;width:16px;height:16px;background:var(--ink);transform:rotate(45deg)}
+.gtip .gact{display:flex;gap:16px;align-items:center;margin-top:8px}
+.gtip .gok{background:#fff;color:var(--ink);border:0;font-weight:600;padding:6px 16px}
+.gtip .gskip{background:none;border:0;color:#9aa5b3;text-decoration:underline;text-underline-offset:3px;padding:0;font-size:13px;margin-left:auto}
+.gtip.small{font-size:15px;padding:10px 36px 10px 14px;max-width:min(300px,calc(100vw - 24px));z-index:40}
+.gtip .gclose{position:absolute;top:4px;right:6px;background:none;border:0;color:#c9d0da;font-size:20px;line-height:1;padding:4px 6px}
+.gtip .gclose:hover{color:#fff}
+.case.gpick{border:2px solid var(--red);padding:4px 13px;font-weight:600;animation:gp 1.6s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.case.gpick{animation:none}}
+.gtip .gskip:hover{color:#fff}
+.intro details{margin-top:14px;max-width:80ch}
+.intro details summary{cursor:pointer;color:var(--blue);font-size:15.5px}
+.intro .box.short{max-width:680px}
+.intro .what{font-size:18px;margin:0 0 4px;max-width:60ch}
 </style>
 </head>
 <body>
@@ -2088,6 +2111,7 @@ function userMsg(text, what = ""){
 }
 function scrollThread(){ const t = $("thread"); t.scrollTop = t.scrollHeight; }
 function greet(){
+  if(window.STUDY){ botMsg(`<p>Describe one milling feature: what it is, its size, the material and the surface quality it needs.</p>`); return; }
   botMsg(`<p>Describe one milling feature in a sentence or two: what it is, its size, the workpiece material and the surface quality it needs.</p>
     <p>I read the values you give, ask for the ones the knowledge still needs, and then show the machining steps and the solid end mills that meet all requirements of each step.</p>`);
 }
@@ -2100,12 +2124,12 @@ function valuesCard(out, sources){
     let v = f.kind === "material" ? (out.material ? materialLabel(out.material) : "") : shownValue(f, (out.entries || {})[i], info);
     const src = v ? (sources[i] || "from your description") : "needed";
     const srcClass = src === "needed" ? "need" : (src.startsWith("you") ? "you" : "");
-    return `<tr data-letter="${esc(info.letter)}" class="${v ? "" : "miss"}"><td>${info.letter ? `<span class="letter">${esc(info.letter)}</span>` : ""}${esc(info.name)}${info.nx ? `<div class="nx">NX ${esc(info.nx)}</div>` : ""}</td>
+    return `<tr data-letter="${esc(info.letter)}" class="${v ? "" : "miss"}"><td>${info.letter ? `<span class="letter">${esc(info.letter)}</span>` : ""}${esc(info.name)}${info.nx && !PLAIN ? `<div class="nx">NX ${esc(info.nx)}</div>` : ""}</td>
       <td class="v">${v || "?"}</td><td><span class="src ${srcClass}">${esc(src)}</span></td></tr>`;
   }).join("");
   const nValues = out.fields.filter(f => f.kind !== "material").length, nx = NX_COUNT[t.nx];
   return `<table class="vals"><thead><tr><th>What</th><th>Value</th><th>Source</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="counts">The knowledge reads ${nValues} values and the material.${nx ? ` NX stores ${nx} attributes for ${an(t.label)} ${esc(t.label)}, including face lists and roughness details.` : ""}</div>`;
+    <div class="counts">The knowledge reads ${nValues} values and the material.${nx && !PLAIN ? ` NX stores ${nx} attributes for ${an(t.label)} ${esc(t.label)}, including face lists and roughness details.` : ""}</div>`;
 }
 function wireLetters(root){
   root.querySelectorAll("tr[data-letter]").forEach(tr => {
@@ -2275,11 +2299,13 @@ function stepName(s){          // the name of a step from the label of its optio
   return cap(task);
 }
 const an = w => /^[aeiou]/i.test(String(w)) ? "an" : "a";
+// the study page (window.STUDY): no NX names and rule numbers on the labels, one fold for the sources, the guided steps
+const PLAIN = !!window.STUDY;
 function showRun(res){
   S.res = res;
   const cols = columns(res.route.steps);
   const line = cols.map((c, i) => { const n = i ? stepName(c[0]).toLowerCase() : stepName(c[0]);
-    return c.length > 1 ? `${n} (NX ${c.map(nxRule).join(" or NX ")}, same priority)` : n; }).join(", then ");
+    return c.length > 1 ? (PLAIN ? `${n} (${c.length} ways, same priority)` : `${n} (NX ${c.map(nxRule).join(" or NX ")}, same priority)`) : n; }).join(", then ");
   const counts = cols.map(c => c.map(s => s.tools.length).join(" or ")).join(", ");
   botMsg(cols.length
     ? `<p><b>Route:</b> ${esc(line)}.</p><p>${esc(counts)} of ${ofClass(res.route.steps[0]) ?? "?"} tools meet all requirements of ${cols.length === 1 ? "the step" : "each step"}. The tools and the reasons are on the right.</p>`
@@ -2297,7 +2323,7 @@ function showAnswer(text){ botMsg(`<div class="llm">${esc(text)}</div><div class
 
 // ------------------------------------------------------------------------------------------------ right side: scope, feature, result
 function scopeHtml(){
-  return `<div class="sect"><h2>What this assistant does</h2><p class="sub">Read this first: it says what the result is based on and what it leaves out.</p>
+  return `<div class="sect"><h2>What this assistant does</h2><p class="sub">${PLAIN ? "What the result is based on and what it leaves out." : "Read this first: it says what the result is based on and what it leaves out."}</p>
     <div class="scope"><div><h3>It does</h3><ul>${SCOPE.does.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
       <div><h3>It is based on</h3><ul>${SCOPE.basedOn.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
       <div class="no"><h3>It does not consider</h3><ul>${SCOPE.notConsidered.map(x => `<li>${esc(cap(x))}</li>`).join("")}</ul></div></div>
@@ -2309,15 +2335,22 @@ function scopeFoot(){
 }
 function drawWork(){
   const w = $("work");
+  const wireScope = () => { $("btnScope").onclick = () => { $("scopeFull").classList.toggle("hidden"); $("scopeFull").scrollIntoView({behavior:"smooth", block:"start"}); }; };
+  if(!S.read && PLAIN){                      // study page: the drawing of the chosen example, or one line before a feature is chosen
+    w.innerHTML = (S.preview ? `<div class="sect" id="featSect"></div>`
+        : `<div class="sect"><h2>Feature and tools</h2><p class="sub" style="margin:0">Pick a feature at the top. Its drawing appears here, and then the tools that fit.</p></div>`)
+      + `${scopeFoot()}<div id="scopeFull" class="hidden">${scopeHtml()}</div>`;
+    wireScope(); if(S.preview) drawFeatureSect(); return;
+  }
   if(!S.read){ w.innerHTML = scopeHtml(); return; }
   w.innerHTML = `<div id="resultSect"></div><div class="sect" id="featSect"></div>${scopeFoot()}<div id="scopeFull" class="hidden">${scopeHtml()}</div>`;
-  $("btnScope").onclick = () => { $("scopeFull").classList.toggle("hidden"); $("scopeFull").scrollIntoView({behavior:"smooth", block:"start"}); };
+  wireScope();
   drawFeatureSect(); if(S.res) drawResult(S.res);
 }
 function drawFeature(){ if(!$("featSect")) drawWork(); else drawFeatureSect(); }
 function featureValues(){
   // the values of the input by their sketch letter, and whether the feature has a floor
-  const v = {}; if(!S.read) return v;
+  const v = {}; if(!S.read && !S.preview) return v;
   S.fields.forEach((f, i) => { const info = fieldInfo(S.featureClass, f), x = S.entries[i];
     if(info.letter && x !== undefined && x !== "") v[info.letter] = x;
     if(info.prop === "hasFloor" && x !== undefined && x !== "") v.floor = String(x) === "true"; });
@@ -2328,11 +2361,11 @@ function drawFeatureSect(){
   if(S.model){ S.model.dispose(); S.model = null; }
   const has3d = FV.has3d(cls) && !!window.THREE, hasSk = FV.has(cls);
   if(S.view === "3d" && !has3d) S.view = "sketch";
-  el.innerHTML = `<div class="fhead"><h2>${esc(cap(t.label))}</h2><span class="nxname">NX ${esc(t.nx)}</span>
+  el.innerHTML = `<div class="fhead"><h2>${esc(cap(t.label))}</h2>${PLAIN ? "" : `<span class="nxname">NX ${esc(t.nx)}</span>`}
       ${has3d || hasSk ? `<div class="seg" role="group" aria-label="View">${has3d ? `<button data-v="3d" aria-pressed="${S.view === "3d"}">3D model</button>` : ""}${hasSk ? `<button data-v="sketch" aria-pressed="${S.view === "sketch"}">Sketch with dimensions</button>` : ""}</div>` : ""}</div>
     <div class="fview ${S.res ? "small" : ""}" id="fview"></div>
     <div class="fcap">${S.view === "3d" ? "Drag to turn. Blue: the faces of the feature." : "Not to scale. Blue: the faces of the feature. The letters are those of the values in the conversation."}
-      Drawn from your values; sizes the knowledge does not read, such as the length, are assumed.</div>`;
+      ${PLAIN ? "" : "Drawn from your values; sizes the knowledge does not read, such as the length, are assumed."}</div>`;
   el.querySelectorAll(".seg button").forEach(b => b.onclick = () => { S.view = b.dataset.v; drawFeatureSect(); });
   const fv = $("fview"), v = featureValues();
   if(S.view === "3d" && has3d){
@@ -2346,17 +2379,19 @@ function drawResult(res){
   if(!$("resultSect")) drawWork();
   const steps = res.route.steps, cols = columns(steps), crit = res.criteria || [];
   const routeHtml = cols.length ? cols.map((col, i) => `${i ? '<div class="arr" aria-hidden="true">→</div>' : ""}<div class="rstep ${col.every(s => !s.tools.length) ? "zero" : ""}">${
-      col.map((s, j) => `${j ? `<div class="alt">or, with the same NX priority</div>` : ""}<div class="k">${esc(stepName(s))}</div>
-        <div class="op">${esc(cap(String(opName(s)).split(", ").pop()))}, NX rule ${esc(nxRule(s))}</div>
+      col.map((s, j) => `${j ? `<div class="alt">${PLAIN ? "or, with the same priority" : "or, with the same NX priority"}</div>` : ""}<div class="k">${esc(stepName(s))}</div>
+        <div class="op">${esc(cap(String(opName(s)).split(", ").pop()))}${PLAIN ? "" : `, NX rule ${esc(nxRule(s))}`}</div>
         <div class="num"><b>${s.tools.length}</b>of ${ofClass(s) ?? "?"} tools meet all requirements</div>
         <div class="first">${s.tools.length ? `Rank 1${s.tools.filter(t => t.rank === 1).length > 1 ? `, shared by ${s.tools.filter(t => t.rank === 1).length} tools, for example` : ""}<br><span class="code">${esc(s.tools[0].tool)}</span>` : "No tool in the tool data meets all requirements"}</div>`).join("")}</div>`).join("")
     : `<p class="empty">No complete route: no option that makes the feature applies.</p>`;
-  const tabsHtml = steps.length ? `<div class="tabs" role="tablist">${steps.map((s, i) => `<button class="tab" role="tab" aria-selected="${i === 0}" data-t="${i}">${esc(stepName(s))} (NX ${esc(nxRule(s))})</button>`).join("")}</div>
+  const tabsHtml = steps.length ? `<div class="tabs" role="tablist">${steps.map((s, i) => `<button class="tab" role="tab" aria-selected="${i === 0}" data-t="${i}">${esc(tabName(steps, i))}</button>`).join("")}</div>
       ${steps.map((s, i) => `<div class="tpane ${i ? "hidden" : ""}" data-p="${i}">${toolsPane(s)}</div>`).join("")}` : "";
   $("resultSect").innerHTML = `<div class="sect"><h2>Tools for each machining step</h2>
-      <p class="sub">The steps come from the NX rules of the ontology. A tool is listed when it meets every requirement of the step.</p>
+      <p class="sub">${PLAIN ? "" : "The steps come from the NX rules of the ontology. "}A tool is listed when it meets every requirement of the step.</p>
       <div class="route">${routeHtml}</div>${tabsHtml}
-      <div style="margin-top:16px">${[whyFold(steps), sourceFold(steps), openFold(res), rankFold(crit), routeFold(res.route)].join("")}</div></div>`;
+      <div style="margin-top:16px">${PLAIN
+        ? `<details class="fold" id="whereFold"><summary><b>Where does this come from?</b><span>the requirements, the sources and the ranking</span></summary><div class="in">${[whyFold(steps), sourceFold(steps), rankFold(crit), routeFold(res.route), openFold(res)].join("")}</div></details>`
+        : [whyFold(steps), sourceFold(steps), openFold(res), rankFold(crit), routeFold(res.route)].join("")}</div></div>`;
   const root = $("resultSect");
   root.querySelectorAll(".tab").forEach(b => b.onclick = () => {
     root.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", x === b));
@@ -2368,6 +2403,13 @@ function drawResult(res){
     const tb = root.querySelector(`[data-rows="${b.dataset.more}"]`); tb.querySelectorAll("tr.extra").forEach(r => r.classList.toggle("hidden"));
     b.textContent = b.textContent.startsWith("Show all") ? "Show the first 5" : b.dataset.label;
   });
+}
+// the name of a step on its tab: with the NX rule; on the study page without it, and numbered when two steps have the same name
+function tabName(steps, i){
+  const n = stepName(steps[i]);
+  if(!PLAIN) return `${n} (NX ${nxRule(steps[i])})`;
+  const same = steps.map((s, k) => k).filter(k => stepName(steps[k]) === n);
+  return same.length > 1 ? `${n}, way ${same.indexOf(i) + 1}` : n;
 }
 let paneSeq = 0;
 function toolsPane(s){
@@ -2465,11 +2507,140 @@ function playEvent(ev){
   else if(ev.kind === "explanation") showExplanation(ev.text);
   else if(ev.kind === "answer"){ userMsg(ev.question); showAnswer(ev.text); }
 }
+// Study page: one click on Send plays what the user did next and, after a short wait, what the assistant showed.
+// The text in the box is the recorded one and cannot be changed; nothing is computed.
+const WAIT_MS = {read:2000}, WAIT_ELSE = 1500, WAIT_LATER = 1000;      // in the guided example; after it every wait is WAIT_LATER
+const USER_KINDS = ["user", "chooseType", "entered", "run", "answer"];
+const BUSY = {read:"Reading the description...", check:"Checking the values...", run:"Finding the tools...", explanation:"Writing the explanation...", answer:"Answering..."};
+function nextText(){
+  const ev = S.events[S.shown]; if(!ev) return "";
+  return ev.kind === "user" ? ev.text : ev.kind === "chooseType" ? typeOf(ev.featureClass).label
+    : ev.kind === "entered" ? enteredText(ev.values, ev.material) : ev.kind === "run" ? "Find tools" : ev.kind === "answer" ? ev.question : "";
+}
+function typingMsg(label){
+  const d = document.createElement("div"); d.className = "msg bot";
+  d.innerHTML = `<div class="txt"><span class="typing"><span class="spin" aria-hidden="true"></span>${esc(label)}</span></div>`;
+  $("thread").appendChild(d); scrollThread(); return d;
+}
+async function sendTurn(){
+  if(S.sending || !S.case || S.shown >= S.events.length) return;
+  S.sending = true; const tok = S.token; guideHide();
+  const wait = async kind => { const t = typingMsg(BUSY[kind] || "Working..."); await new Promise(ok => setTimeout(ok, G.on && G.phase === "first" ? (WAIT_MS[kind] || WAIT_ELSE) : WAIT_LATER)); t.remove(); return S.token === tok; };
+  const ev = S.events[S.shown++]; let hadRun = false;
+  if(ev.kind === "answer") userMsg(ev.question); else if(ev.kind === "run") userMsg("Find tools"); else playEvent(ev);
+  drawGuidedBar();
+  if(ev.kind === "answer"){ if(!await wait("answer")) return; showAnswer(ev.text); }
+  else if(ev.kind === "run"){ if(!await wait("run")) return; showRun(S.case.run); hadRun = true; }
+  while(S.shown < S.events.length && !USER_KINDS.includes(S.events[S.shown].kind)){
+    const e = S.events[S.shown]; if(!await wait(e.kind)) return;
+    S.shown++; playEvent(e);
+  }
+  S.sending = false; drawGuidedBar(); guideAfterTurn(hadRun);
+}
+function skipToResult(){
+  if(S.sending || !S.case) return; guideHide();
+  const hadRun = !S.res; showAll(); guideAfterTurn(hadRun);
+}
+function drawGuidedBar(){
+  const c = $("composer");
+  if(!S.case){ c.innerHTML = `<div class="hint" style="margin:0">Pick a feature at the top to start.</div>`; return; }
+  if(S.shown >= S.events.length && !S.sending){
+    c.innerHTML = `<div class="endhint" style="margin:0">This example is complete. Try another feature at the top. When you have seen enough, go to the questionnaire (top right).</div>`; return; }
+  const text = S.sending ? "" : nextText();
+  c.innerHTML = `<div class="hint">Recorded example. The text is fixed.</div>
+    <div class="row"><textarea id="box" rows="${Math.min(5, Math.max(1, Math.ceil(text.length / 48)))}" readonly aria-label="Next message">${esc(text)}</textarea>
+      <button class="dark" id="send" ${S.sending ? "disabled" : ""}>Send</button></div>
+    ${S.res ? "" : `<div class="skiprow"><button class="link" id="rSkip" ${S.sending ? "disabled" : ""}>Skip to the result</button></div>`}`;
+  $("send").onclick = sendTurn; if($("rSkip")) $("rSkip").onclick = skipToResult;
+  if(!S.sending && !G.tip) $("send").focus({preventScroll:true});
+}
+
+// ---------------------------------------------------------------- the guide of the study page
+// One part of the page stays bright and has a red frame, the rest is dimmed; a note with an arrow says what to do.
+// It runs once, for the first example, and can be skipped.
+const G = {on:false, tip:null, parts:[], target:null, side:"bottom", point:null, phase:"first"};
+function guideHide(){ G.parts.forEach(e => e.remove()); G.parts = []; G.tip = null; G.target = null;
+  if(G.point){ G.point.classList.remove("gpick"); G.point = null; } }
+function guideEnd(){ G.on = false; guideHide(); if($("send")) $("send").focus({preventScroll:true}); }
+function guideShow(target, text, side, ok, point, small){
+  guideHide(); if(!G.on || !target) return;
+  G.target = target; G.side = side;
+  if(small){                                   // a small note: the page is not dimmed and stays usable; it can be closed
+    for(let i = 0; i < 5; i++){ const b = document.createElement("div"); b.style.display = "none"; document.body.appendChild(b); G.parts.push(b); }
+    const tip = document.createElement("div"); tip.className = "gtip small"; tip.setAttribute("role", "status");
+    tip.innerHTML = `<div class="garrow"></div><div>${esc(text)}</div><button class="gclose" aria-label="Close this note">×</button>`;
+    document.body.appendChild(tip); G.parts.push(tip); G.tip = tip;
+    tip.querySelector(".gclose").onclick = small.close || guideHide;
+    guidePlace(); return;
+  }
+  if(point){ G.point = point; point.classList.add("gpick"); }
+  for(let i = 0; i < 4; i++){ const b = document.createElement("div"); b.className = "gblock"; document.body.appendChild(b); G.parts.push(b); }
+  const ring = document.createElement("div"); ring.className = "gring"; document.body.appendChild(ring); G.parts.push(ring);
+  const tip = document.createElement("div"); tip.className = "gtip"; tip.setAttribute("role", "status");
+  tip.innerHTML = `<div class="garrow"></div><div>${esc(text)}</div><div class="gact">${ok ? `<button class="gok">${esc(ok.label || "OK")}</button>` : ""}<button class="gskip">Skip the guide</button></div>`;
+  document.body.appendChild(tip); G.parts.push(tip); G.tip = tip;
+  tip.querySelector(".gskip").onclick = guideEnd;
+  if(ok){ const b = tip.querySelector(".gok"); b.onclick = ok.then; b.focus({preventScroll:true}); }
+  guidePlace();
+}
+function guidePlace(){
+  if(!G.tip || !G.target) return;
+  const vw = innerWidth, vh = innerHeight, r0 = G.target.getBoundingClientRect(), pad = 5;
+  const r = {l:Math.max(4, r0.left - pad), t:Math.max(4, r0.top - pad), r:Math.min(vw - 4, r0.right + pad), b:Math.min(vh - 4, r0.bottom + pad)};
+  const [bt, bb, bl, br, ring, tip] = G.parts, px = v => v + "px";
+  const set = (e, l, t, w, h) => { e.style.left = px(l); e.style.top = px(t); e.style.width = px(Math.max(0, w)); e.style.height = px(Math.max(0, h)); };
+  set(bt, 0, 0, vw, r.t); set(bb, 0, r.b, vw, vh - r.b); set(bl, 0, r.t, r.l, r.b - r.t); set(br, r.r, r.t, vw - r.r, r.b - r.t);
+  set(ring, r.l, r.t, r.r - r.l, r.b - r.t);
+  const tw = tip.offsetWidth, th = tip.offsetHeight, gap = 16, clamp = (v, a, b) => Math.max(a, Math.min(b, v)), ar = tip.querySelector(".garrow");
+  let side = G.side;
+  if(side === "left" && r.l - gap - tw < 8) side = r.t - gap - th > 8 ? "top" : "bottom";
+  if(side === "top" && r.t - gap - th < 8) side = "bottom";
+  if(side === "bottom" && r.b + gap + th > vh - 8) side = "top";
+  let x, y;
+  if(side === "left" && th > r.b - r.t - 60){ x = r.l - gap - tw; y = clamp((r.t + r.b - th) / 2, 8, vh - th - 8); ar.style.cssText = `right:-7px;top:${th / 2 - 8}px`; }
+  else if(side === "left"){ x = r.l - gap - tw; y = clamp(r.t + 24, 8, vh - th - 8); ar.style.cssText = `right:-7px;top:${clamp(r.t + 50 - y, 14, th - 30)}px`; }
+  else { const pr = G.point ? G.point.getBoundingClientRect() : null, aim = pr ? (pr.left + pr.right) / 2 : Math.min(r.l + 70, (r.l + r.r) / 2);
+    x = clamp(pr ? aim - 44 : r.l + 20, 8, vw - tw - 8); y = side === "top" ? r.t - gap - th : r.b + gap;
+    const ax = clamp(aim - 8 - x, 16, tw - 32);
+    ar.style.cssText = side === "top" ? `bottom:-7px;left:${ax}px` : `top:-7px;left:${ax}px`; }
+  tip.style.left = px(x); tip.style.top = px(Math.max(8, y));
+}
+addEventListener("resize", guidePlace); addEventListener("scroll", guidePlace, true);
+function guideStart(){
+  G.on = true; G.phase = "first";
+  const slot = document.querySelector(".case"), name = slot ? slot.textContent : "a feature";
+  guideShow($("cases"), `Click ${name} to start.`, "bottom", null, slot);
+}
+function guideAfterCase(){
+  if(G.phase === "first") guideShow($("composer"), "This is what a user would type. Click Send.", "top");
+  else { G.phase = "second"; guideHide(); }                       // the second example runs without notes
+}
+function guideAfterTurn(hadRun){
+  if(!G.on) return;
+  const done = S.shown >= S.events.length;
+  if(G.phase !== "first"){
+    if(done) guideShow($("studyCtl").lastElementChild, "When you have seen enough, go to the questionnaire.", "left", null, null, {close: guideEnd});
+    return;
+  }
+  const again = () => { G.phase = "free"; guideShow($("cases"), "More features here. Try another one when you like.", "bottom", null, null, {}); };
+  if(hadRun) guideShow(document.querySelector("#resultSect .sect"), "The tools that fit appear here. Below the table you can open where this comes from.", "left",
+    {label: "Next", then: () => { if(done) again(); else guideShow($("composer"), "You can ask about the result. The question is ready. Click Send.", "top"); }});
+  else if(done) again();
+  else guideShow($("composer"), "The next message is ready. Keep clicking Send.", "top");
+}
 function loadCase(i){
   const c = window.CASES[i]; S.caseIdx = i; S.case = c; S.meta = c.meta;
-  Object.assign(S, {text:c.description, featureClass:null, material:null, entries:{}, fields:[], readings:[], read:null, res:null, entered:{}, shown:0, events:c.events});
+  Object.assign(S, {text:c.description, featureClass:null, material:null, entries:{}, fields:[], readings:[], read:null, res:null, entered:{}, shown:0, events:c.events,
+                    preview:null, sending:false, token:(S.token || 0) + 1});
   if(S.model){ S.model.dispose(); S.model = null; }
-  document.querySelectorAll(".case").forEach((b, k) => b.setAttribute("aria-pressed", k === i));
+  document.querySelectorAll(".case").forEach(b => { b.setAttribute("aria-pressed", +b.dataset.i === i); if(+b.dataset.i === i) b.classList.remove("hidden"); });
+  if(PLAIN){                                                                    // study page: the drawing of the example first, then Send by Send
+    const last = [...c.events].reverse().find(e => e.out && e.out.fields);
+    if(last){ S.preview = last.out; S.featureClass = last.out.record.featureClass; S.fields = last.out.fields; S.entries = Object.assign({}, last.out.entries || {}); }
+    $("thread").innerHTML = ""; greet(); drawWork(); drawGuidedBar();
+    if(G.on) guideAfterCase();
+    return;
+  }
   $("thread").innerHTML = ""; greet(); drawWork(); drawReplayBar();
   next();                                                                       // the description is the first step
 }
@@ -2477,6 +2648,7 @@ function next(){ if(S.shown < S.events.length){ playEvent(S.events[S.shown++]); 
 function showAll(){ while(S.shown < S.events.length) playEvent(S.events[S.shown++]); drawReplayBar(); }
 function back(){ const k = S.shown - 1; if(k < 1) return; loadCase(S.caseIdx); while(S.shown < k) next(); }
 function drawReplayBar(){
+  if(PLAIN){ drawGuidedBar(); return; }
   const done = S.shown >= S.events.length;
   const hint = window.STUDY && done ? `<div class="endhint">This run is complete. Choose another case above, or go to the questionnaire (top right).</div>` : "";
   $("composer").innerHTML = `${hint}<div class="replaybar"><span class="count">Step ${S.shown} of ${S.events.length}${done ? ", the end of this run" : ""}</span>
@@ -2489,18 +2661,25 @@ function startReplay(){
   const c0 = window.CASES[0];
   $("status").innerHTML = `<span>Recorded runs, ${esc(String(c0.recorded).slice(0, 10).split("-").reverse().join("."))}. The page plays them back; nothing is computed now.</span>`;
   $("cases").classList.remove("hidden");
+  if(PLAIN){                                                                    // study page: "feature" instead of "case", no note
+    const want = ["C1", "C4", "C12", "C14", "C7", "C3", "C11", "C2"];             // 16.11.2026: features with tools in every step first
+    const order = window.CASES.map((c, i) => i).sort((a, b) => { const ra = want.indexOf(window.CASES[a].case), rb = want.indexOf(window.CASES[b].case);
+      return (ra < 0 ? 99 : ra) - (rb < 0 ? 99 : rb) || a - b; });
+    $("cases").innerHTML = `<span class="lead">Choose a feature:</span>${order.map(i => `<button class="case" aria-pressed="false" data-i="${i}">${esc(cap(caseTitle(window.CASES[i])))}</button>`).join("")}`;
+  } else
   $("cases").innerHTML = `<span class="lead">Choose a case:</span>${window.CASES.map((c, i) => `<button class="case" aria-pressed="false" data-i="${i}">${esc(cap(caseTitle(c)))}</button>`).join("")}
     <span class="note">Use Next step at the bottom left.</span>`;
   $("cases").querySelectorAll(".case").forEach(b => b.onclick = () => loadCase(+b.dataset.i));
   $("chatTitle").textContent = "Conversation (recorded)";
-  loadCase(Math.max(0, hashCase()));
+  if(PLAIN && hashCase() < 0){ S.meta = window.CASES[0].meta; S.case = null; $("thread").innerHTML = ""; greet(); drawWork(); drawGuidedBar(); }
+  else loadCase(Math.max(0, hashCase()));
   window.addEventListener("hashchange", () => { const i = hashCase(); if(i >= 0) loadCase(i); });
 }
 // a link such as recorded_runs.html#C12 opens that case (the interview page, 10.11.2026); without it the page starts with the first case
 function hashCase(){ const h = decodeURIComponent(location.hash.slice(1)); return window.CASES.findIndex(c => c.case === h); }
 function caseTitle(c){ const t = (c.meta.featureTypes || []).find(f => f.iri === c.run.record.featureClass); return t ? t.label : c.case; }
 document.addEventListener("keydown", e => {
-  if(S.mode !== "replay" || e.target.closest("input,textarea,select")) return;
+  if(S.mode !== "replay" || PLAIN || e.target.closest("input,textarea,select")) return;
   if(e.key === "ArrowRight"){ next(); } else if(e.key === "ArrowLeft"){ back(); }
 });
 
@@ -2513,35 +2692,30 @@ function surveyLink(){
            : `<button class="primary" disabled title="The link to the questionnaire follows">Questionnaire (link follows)</button>`;
 }
 function startStudy(){
-  $("status").innerHTML = `<span>Recorded runs, played back</span>`;
+  $("status").innerHTML = `<span>Recorded demo</span>`;
+  document.querySelector(".brand span").textContent = "Finds solid end mills for one milling feature";
   $("studyCtl").classList.remove("hidden");
   $("studyCtl").innerHTML = `<button class="link" id="aboutBtn">About this study</button>${surveyLink()}`;
-  $("aboutBtn").onclick = showIntro;
+  $("aboutBtn").onclick = () => { guideEnd(); showIntro(); };
   document.addEventListener("keydown", e => { if(e.key === "Escape" && !$("intro").classList.contains("hidden")) closeIntro(); });
   if(hashCase() < 0) showIntro();                                               // a link to one case skips the introduction
 }
 function showIntro(){
   const day = String(window.CASES[0].recorded).slice(0, 10).split("-").reverse().join(".");
   const contact = window.STUDY.contact ? `<p class="fine">Questions about the study: ${esc(window.STUDY.contact)}</p>` : "";
-  $("intro").innerHTML = `<div class="box">
-    <h1 id="introTitle">Tool Selection Assistant: expert questionnaire</h1>
-    <p class="lead">Thank you for taking part. This study is part of a master's thesis at TU Berlin (Zhangting Ge). It evaluates an assistant that selects solid end mills for one milling feature with the knowledge in an ontology.</p>
-    <h2>What to do, about 20 minutes</h2>
-    <ol><li>Look at the recorded runs, about 8 minutes. Choose any case at the top. Please follow at least one case from the start to the end with <b>Next step</b>.</li>
-      <li>Answer the questionnaire, about 12 minutes. The button <b>Go to the questionnaire</b> is at the top right. It opens in a new tab, so you can look back at the runs.</li></ol>
-    <p class="fine">The runs were recorded with the real system on ${esc(day)}. This page plays them back: nothing is computed, and you cannot enter your own feature. Best viewed on a computer screen.</p>
-    <p class="fine">Taking part is voluntary. The questionnaire is anonymous: it asks for no names and no company names. The answers are used only for this master's thesis and are reported only in summary form. This page is hosted on GitHub; the questionnaire runs on the survey server of TU Berlin, where the answers are stored.</p>
-    ${contact}
-    <h2>What the assistant does and does not do</h2>
-    <div class="scope"><div><h3>It does</h3><ul>${SCOPE.does.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
-      <div><h3>It is based on</h3><ul>${SCOPE.basedOn.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
-      <div class="no"><h3>It does not consider</h3><ul>${SCOPE.notConsidered.map(x => `<li>${esc(cap(x))}</li>`).join("")}</ul></div></div>
-    <p class="rankline">${esc(SCOPE.ranking)}</p>
-    <div class="go"><button class="dark" id="introStart">Start with the recorded runs</button></div></div>`;
+  $("intro").innerHTML = `<div class="box short">
+    <h1 id="introTitle">Tool Selection Assistant: a short demo and a questionnaire</h1>
+    <p class="lead">Thank you for taking part. This is part of a master's thesis at TU Berlin (Zhangting Ge).</p>
+    <p class="what">You click through one recorded example of an assistant that selects end mills for a milling feature. Then you answer a questionnaire. Together about 15 minutes.</p>
+    <p class="fine">The example was recorded with the real system on ${esc(day)}. This page plays it back, so you cannot type your own feature. Best viewed on a computer screen.</p>
+    <details><summary>Taking part and your data</summary>
+      <p class="fine">Taking part is voluntary. The questionnaire is anonymous: it asks for no names and no company names. The answers are used only for this master's thesis and are reported only in summary form. This page is hosted on GitHub; the questionnaire runs on the survey server of TU Berlin, where the answers are stored.</p>
+      ${contact}</details>
+    <div class="go"><button class="dark" id="introStart">Start</button></div></div>`;
   $("intro").classList.remove("hidden"); $("intro").scrollTop = 0;
   $("introStart").onclick = closeIntro; $("introStart").focus({preventScroll: true});
 }
-function closeIntro(){ $("intro").classList.add("hidden"); }
+function closeIntro(){ $("intro").classList.add("hidden"); if(!S.case && !G.started){ G.started = true; guideStart(); } else guidePlace(); }
 
 // ------------------------------------------------------------------------------------------------ start
 (async function init(){
